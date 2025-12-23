@@ -1,0 +1,7 @@
+{
+  "name": "AI Virtual Barber",
+  "description": "A high-end virtual stylist application that uses Gemini AI to transform your look with different hairstyles and beard designs.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
