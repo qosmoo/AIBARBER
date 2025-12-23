@@ -2,8 +2,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Scissors, 
-  User as UserIcon, 
-  Camera, 
   LogIn, 
   LogOut, 
   Heart, 
@@ -13,8 +11,9 @@ import {
   Palette,
   UploadCloud,
   CheckCircle2,
-  Trash2,
-  Info
+  Info,
+  Camera,
+  Key
 } from 'lucide-react';
 import { Hairstyle, BeardStyle, StylistState, StylingOptions, User, SavedLook } from './types';
 import { applyAIStyle } from './services/geminiService';
@@ -38,9 +37,18 @@ const App: React.FC = () => {
   const [authEmail, setAuthEmail] = useState('');
   const [authName, setAuthName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [hasKey, setHasKey] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    const checkKeyStatus = async () => {
+      if (window.aistudio) {
+        const selected = await window.aistudio.hasSelectedApiKey();
+        setHasKey(selected);
+      }
+    };
+    checkKeyStatus();
+
     const savedUser = localStorage.getItem('barber_user');
     if (savedUser) {
       const user = JSON.parse(savedUser);
@@ -51,6 +59,13 @@ const App: React.FC = () => {
       }
     }
   }, []);
+
+  const handleConnectKey = async () => {
+    if (window.aistudio) {
+      await window.aistudio.openSelectKey();
+      setHasKey(true);
+    }
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -70,12 +85,18 @@ const App: React.FC = () => {
 
   const handleGenerate = async () => {
     if (!state.originalImage) return;
+
+    if (window.aistudio && !(await window.aistudio.hasSelectedApiKey())) {
+      await window.aistudio.openSelectKey();
+      setHasKey(true);
+      return;
+    }
     
-    // UI processing state (2s mock delay as requested, followed by real AI)
     setIsProcessing(true);
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
     
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Add a slight delay for better UX feel during high-quality processing
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
     try {
       const result = await applyAIStyle(state.originalImage, state.options);
@@ -136,15 +157,22 @@ const App: React.FC = () => {
               </span>
               AI BARBER
             </h1>
-            {state.currentUser ? (
-              <button onClick={handleLogout} className="p-2 text-slate-500 hover:text-white transition-colors" title="Log Out">
-                <LogOut className="w-5 h-5" />
-              </button>
-            ) : (
-              <button onClick={() => setShowAuthModal(true)} className="flex items-center gap-2 text-sm font-bold text-blue-500 hover:text-blue-400 transition-all">
-                <LogIn className="w-4 h-4" /> Sign In
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {!hasKey && (
+                <button onClick={handleConnectKey} className="p-2 text-yellow-500 hover:text-yellow-400" title="API Key Required">
+                  <Key className="w-5 h-5" />
+                </button>
+              )}
+              {state.currentUser ? (
+                <button onClick={handleLogout} className="p-2 text-slate-500 hover:text-white transition-colors" title="Log Out">
+                  <LogOut className="w-5 h-5" />
+                </button>
+              ) : (
+                <button onClick={() => setShowAuthModal(true)} className="flex items-center gap-2 text-sm font-bold text-blue-500 hover:text-blue-400 transition-all">
+                  <LogIn className="w-4 h-4" /> Sign In
+                </button>
+              )}
+            </div>
           </div>
           <p className="text-slate-500 text-xs font-medium uppercase tracking-widest">Digital Grooming Visualization</p>
         </div>
@@ -229,6 +257,12 @@ const App: React.FC = () => {
         </div>
 
         <div className="p-8 border-t border-slate-800 bg-slate-900/80">
+          {!hasKey && (
+            <div className="mb-4 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-2xl text-yellow-500 text-xs font-bold flex items-start gap-3">
+              <Key className="w-4 h-4 shrink-0 mt-0.5" />
+              <p>Gemini 3 Pro requires a selected API key for high-quality generation.</p>
+            </div>
+          )}
           <button
             onClick={handleGenerate}
             disabled={isProcessing || !state.originalImage}
@@ -240,7 +274,7 @@ const App: React.FC = () => {
           >
             {isProcessing ? (
               <>
-                <RefreshCw className="w-6 h-6 animate-spin" /> PROCESSING...
+                <RefreshCw className="w-6 h-6 animate-spin" /> STYLING...
               </>
             ) : (
               <>
@@ -263,7 +297,7 @@ const App: React.FC = () => {
                   <h2 className="text-5xl md:text-7xl font-black tracking-tightest text-white leading-none mb-4">
                     AI BARBER <span className="text-blue-600">&</span> STYLIST
                   </h2>
-                  <p className="text-xl text-slate-400 font-medium">Professional-grade grooming preview powered by Gemini AI.</p>
+                  <p className="text-xl text-slate-400 font-medium">Ultra-high-quality grooming preview powered by Gemini 3 Pro.</p>
                 </div>
                 {state.generatedImage && (
                   <div className="flex items-center gap-4">
@@ -287,9 +321,18 @@ const App: React.FC = () => {
 
               {state.error && (
                 <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-6 rounded-3xl mb-12 animate-in fade-in duration-500">
-                  <p className="font-bold flex items-center gap-3">
-                    <Info className="w-5 h-5" /> {state.error}
-                  </p>
+                  <div className="font-bold flex items-start gap-3">
+                    <Info className="w-5 h-5 shrink-0 mt-1" /> 
+                    <div>
+                      <p className="text-lg">Generation Encountered an Issue</p>
+                      <p className="text-sm text-slate-400 font-medium mt-1">{state.error}</p>
+                      {state.error.includes("API key") && (
+                        <button onClick={handleConnectKey} className="mt-4 px-6 py-2 bg-red-500 text-white rounded-xl text-sm font-black">
+                          Connect API Key
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -320,7 +363,7 @@ const App: React.FC = () => {
                     <span className="text-xs font-black uppercase tracking-widest text-slate-500">AI Visualization</span>
                   </div>
                   <div className="aspect-[4/5] rounded-[2rem] bg-slate-900 border border-slate-800/50 overflow-hidden relative shadow-2xl">
-                    {isProcessing ? (
+                    {state.isLoading ? (
                       <div className="w-full h-full flex flex-col items-center justify-center p-12 text-center bg-slate-900/50">
                         <div className="w-24 h-24 mb-8 relative">
                           <div className="absolute inset-0 border-4 border-blue-600/20 rounded-full"></div>
