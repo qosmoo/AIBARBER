@@ -1,0 +1,8 @@
+
+{
+  "name": "virtual-stylist",
+  "compatibility_date": "2025-05-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}
